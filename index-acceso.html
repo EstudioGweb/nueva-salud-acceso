@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nueva Salud · Activar cuenta</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px system-ui,-apple-system,sans-serif;background:linear-gradient(130deg,#f8f3ff,#ececf3);color:#28213d}.card{width:min(440px,88vw);padding:32px;background:#fff;border:1px solid #e4d8fa;border-radius:22px;box-shadow:0 15px 45px #53358518}h1{font-size:24px;color:#5e2b9b;margin-bottom:8px}p{line-height:1.5;color:#655d70}.field{display:block;margin:14px 0 6px;font-weight:600;font-size:14px}input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #cac5d5;border-radius:10px;font:inherit}button{width:100%;padding:13px;border:0;border-radius:10px;background:#6f2dbd;color:white;font-weight:700;font-size:16px;cursor:pointer;margin-top:20px}button:disabled{opacity:.45;cursor:not-allowed}.message{margin-top:16px;line-height:1.5;white-space:pre-wrap}.error{color:#a42434}.success{color:#167044}small{color:#6f6878}</style></head><body><main class="card"><h1>Centro Médico Nueva Salud</h1><p>Activación y recuperación de acceso</p><div id="status" class="message" role="status">Comprobando enlace de activación…</div><form id="form" hidden><label class="field" for="password">Nueva contraseña</label><input id="password" type="password" autocomplete="new-password" minlength="12" required placeholder="Mínimo 12 caracteres"><label class="field" for="repeat">Repetir contraseña</label><input id="repeat" type="password" autocomplete="new-password" minlength="12" required><button id="save" type="submit">Guardar contraseña</button></form><p><small>Esta página solamente activa tu cuenta. No contiene datos administrativos. No compartas el enlace recibido por correo.</small></p></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+'use strict';
+const URL_SUPABASE='https://ukwatxlitwwnxwgnkxnh.supabase.co';
+const CLAVE_PUBLICA='sb_publishable_ZVsVHO_G9B3SWsft9i13pQ_iQiRe5DY';
+const status=document.getElementById('status');
+const form=document.getElementById('form');
+function show(message,error=false){status.textContent=message;status.className='message '+(error?'error':'');}
+async function start(){
+  if(!window.supabase){show('No se pudo cargar la conexión segura. Revisá tu conexión a internet y recargá la página.',true);return;}
+  const auth=window.supabase.createClient(URL_SUPABASE,CLAVE_PUBLICA,{auth:{detectSessionInUrl:true,persistSession:false,autoRefreshToken:false}});
+  const params=new URLSearchParams(location.hash.slice(1));
+  const query=new URLSearchParams(location.search);
+  if(params.get('error')||query.get('error')){show('El enlace de activación fue rechazado o venció. Volvé a solicitar un correo nuevo desde Supabase.',true);return;}
+  try{
+    if(query.get('code')){
+      const {error}=await auth.auth.exchangeCodeForSession(query.get('code'));if(error)throw error;
+    }else if(params.get('access_token')&&params.get('refresh_token')){
+      const {error}=await auth.auth.setSession({access_token:params.get('access_token'),refresh_token:params.get('refresh_token')});if(error)throw error;
+    }
+    const {data,error}=await auth.auth.getUser();if(error)throw error;
+    if(!data?.user){show('No hay una invitación válida en este enlace. Abrí el enlace completo que recibiste por correo o solicitá uno nuevo.',true);return;}
+    history.replaceState(null,'',location.pathname);
+    show('Enlace verificado. Elegí una contraseña nueva para tu cuenta.');
+    form.hidden=false;
+    form.addEventListener('submit',async(e)=>{
+      e.preventDefault();const password=document.getElementById('password').value;
+      if(password!==document.getElementById('repeat').value){show('Las contraseñas no coinciden.',true);return;}
+      const button=document.getElementById('save');button.disabled=true;show('Guardando contraseña…');
+      const {error}=await auth.auth.updateUser({password});
+      if(error){show('No se pudo guardar: '+error.message,true);button.disabled=false;return;}
+      form.hidden=true;show('¡Contraseña configurada! Ya podés iniciar sesión en Nueva Salud con tu correo y esta contraseña.');status.classList.add('success');
+      await auth.auth.signOut();
+    });
+  }catch(error){show('No se pudo activar el enlace: '+(error?.message||'error inesperado')+'. Solicitá uno nuevo desde Supabase.',true);}
+}
+start();
+</script></body></html>
